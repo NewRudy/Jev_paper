@@ -1,0 +1,35 @@
+[train] -> train.jsonl
+  samples: 800
+  questions per sample: {3: 800}
+  question types: {'between': 222, 'compare_choice': 456, 'direction_choice': 570, 'direction_noul': 300, 'score': 320, 'threshold': 532}
+  top labels: [(False, 661), (True, 393), ('1', 161), ('west', 158), ('east', 141), ('south', 136), ('north', 135), ('0', 103), ('2', 56), ('warehouse', 35), ('barn', 29), ('cabin', 29)]
+
+[train_random] -> train_random.jsonl
+  samples: 800
+  questions per sample: {2: 4, 3: 415, 4: 381}
+  question types: {'between': 357, 'compare_choice': 625, 'direction_choice': 582, 'direction_noul': 353, 'score': 310, 'threshold': 550}
+  top labels: [(False, 877), (True, 383), ('west', 152), ('north', 150), ('east', 143), ('1', 139), ('south', 137), ('2', 86), ('0', 85), ('marsh', 49), ('barn', 42), ('chapel', 41)]
+
+[eval_id] -> eval_id.jsonl
+  samples: 150
+  questions per sample: {3: 150}
+  question types: {'between': 32, 'compare_choice': 70, 'direction_choice': 122, 'direction_noul': 62, 'score': 52, 'threshold': 112}
+  top labels: [(False, 116), (True, 90), ('east', 33), ('north', 30), ('west', 30), ('south', 29), ('0', 27), ('1', 14), ('2', 11), ('marsh', 7), ('pond', 7), ('tower', 7)]
+
+[eval_ood_size] -> eval_ood_size.jsonl
+  samples: 100
+  questions per sample: {3: 100}
+  question types: {'between': 20, 'compare_choice': 58, 'direction_choice': 74, 'direction_noul': 38, 'score': 30, 'threshold': 80}
+  top labels: [(False, 83), (True, 55), ('east', 25), ('west', 20), ('2', 19), ('north', 16), ('south', 13), ('1', 8), ('cabin', 7), ('windmill', 6), ('workshop', 5), ('marsh', 5)]
+
+[eval_ood_count] -> eval_ood_count.jsonl
+  samples: 100
+  questions per sample: {3: 100}
+  question types: {'between': 42, 'compare_choice': 70, 'direction_choice': 62, 'direction_noul': 28, 'score': 34, 'threshold': 64}
+  top labels: [(False, 80), (True, 54), ('east', 19), ('north', 17), ('west', 14), ('1', 13), ('south', 12), ('2', 11), ('0', 10), ('cabin', 8), ('farmhouse', 8), ('barn', 8)]
+
+[eval_ood_rule] -> eval_ood_rule.jsonl
+  samples: 100
+  questions per sample: {3: 100}
+  question types: {'between': 16, 'compare_choice': 32, 'direction8_choice': 100, 'direction_choice': 42, 'direction_noul': 38, 'score': 22, 'threshold': 50}
+  top labels: [(False, 70), (True, 34), ('west', 30), ('north', 23), ('south', 18), ('northwest', 15), ('northeast', 15), ('southeast', 15), ('east', 13), ('southwest', 13), ('0', 12), ('2', 8)]
