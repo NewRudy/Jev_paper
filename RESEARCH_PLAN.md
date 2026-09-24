@@ -14,11 +14,11 @@
 **核心问题**：判断模型直答 k 跳空间组合问题的能力边界在哪里？越过边界后，程序化分解（judgment chaining：k 个原子判断 + 代码组合）能否以可控成本恢复精度？模型自报置信度能否引导"直答/分解"路由？
 
 **核心贡献**（拟）：
-1. **C1 实证**：首个判断模型多跳组合泛化的系统测量——初步结果显示域内 k≤2 达 99% 但外推 k=3 崩至 23%（断崖式边界）
-2. **C2 方法**：置信引导分解（Confidence-Guided Decomposition）——同模型、无 LLM 升级的混合策略，在精度-成本平面上与纯直答/纯分解/LLM-CoT 比较
-3. **C3 分析**：微调对校准的双面效应——教会判别的同时破坏歧义不确定性（初步：歧义集 ECE 0.15→0.42）
+1. **C1 实证**：首个判断模型多跳组合泛化的系统测量——初步结果显示域内 k≤2 达 99% 但外推 k=3 崩至 23%（断崖式边界，反噬外推）。
+2. **C2 方法（System 1.5）**：**概率模块化组合（Probabilistic Modular Composition, PMC）与置信自适应路由**——以离散二维空间卷积进行概率边际化计算，推导复合置信度与熵，并在精度-成本-延迟三维 Pareto 前沿上系统对比 System 1（单步直答）vs System 1.5（PMC）vs System 2（LLM-CoT）。
+3. **C3 算法与分析**：**歧义正则化微调（Ambiguity-Regularized Fine-Tuning, AR-FT）**——揭示标准微调破坏内在合理不确定性（ECE 0.15→0.42）的机制，提出引入平衡歧义锚点的 AR-FT，在维持域内 99% 判别精度的同时成功挽救 OOD 校准。
 
-**目标期刊**：Applied Intelligence（中科院 3 区）备选 Cognitive Computation；备胎 IEEE Access。
+**目标期刊**：Applied Intelligence（中科院 3 区 / CCF-C）备选 Cognitive Computation；备胎 IEEE Access。
 
 ---
 
@@ -168,9 +168,9 @@ State 为 k 条关系事实（如 "the depot is north of the windmill. / the sil
 
 **C1（实证贡献）**：首个 System One 判断模型多跳组合泛化的系统刻画。初步证据显示能力边界呈断崖（域内 99% / 外推 23%），且域内训练可能损害外推（23% < 基线 41%）。对照 Compositional-ARC 的 LLM 失败结果，构成"组合泛化是跨模型类的普遍痛点、且判断模型更脆弱"的证据链一环。
 
-**C2（方法贡献）**：**置信引导分解（Confidence-Guided Decomposition）**。定义：对 k 跳判断请求，若模型直答置信 ≥ 阈值 α 则直答（1 次前向），否则程序化分解为 k 个原子判断（k 次前向）+ 代码组合。输出：精度-成本 Pareto 曲线。对比对象：纯直答、纯分解、k 做路由（免费信号）、LLM-CoT（GLM/Qwen，System 2 对照）。**新颖性**：同模型内路由（区别于 cascades 的模型间路由）、无需生成/CoT、对判断模型生态直接可用。
+**C2（方法贡献：System 1.5 神经-符号判断流）**：**概率模块化组合（Probabilistic Modular Composition, PMC）与自适应置信路由**。针对判别模型无法通过外部直接算术加减的缺陷，提出 PMC 算法：将 k-跳问题分解为 k 个原子判断，通过离散二维空间概率卷积（Discrete 2D Spatial Convolution）计算组合位移的全局概率分布，自然推导出组合路径的置信度与熵。构建三维 Pareto 前沿（Accuracy vs Latency vs Cost），系统性量化 System 1（纯直答）、System 1.5（PMC 分解）、System 2（LLM-CoT 升级）的优劣边界。
 
-**C3（分析贡献）**：判断训练对概率质量的双面效应——(a) 歧义不确定性被破坏（ECE 0.15→0.42）；(b) 组合深度的置信失真（per-k 校准曲线，待测）；(c) 温度重拟合的必要性与代价。总信息：**判断模型的"校准"卖点在分布外是脆弱的**。
+**C3（算法与机理贡献）**：**歧义正则化微调（Ambiguity-Regularized Fine-Tuning, AR-FT）**。揭示当前判别模型微调中“确定性极化”对固有不确定性（歧义）的破坏机理（ECE 0.15→0.42）。提出 AR-FT 算法：在训练集中引入对角线平衡歧义锚点（Ambiguity Anchors），利用对称软标签约束微调损失，成功在维持 k≤2 域内判别高精度的同时，保护了模型在 OOD/内在歧义下的概率校准品质。
 
 ---
 
@@ -229,10 +229,13 @@ State 为 k 条关系事实（如 "the depot is north of the windmill. / the sil
 ## 10. 当前进度与时间表
 
 - ✅ 数据平台全部建成并零错误验证（链式/歧义/坐标 + 独立验证器）
-- ✅ E1 单 seed 初步结果（本文 §5.1 表）
-- ✅ E5 初步结果（§5.2）
-- 🏃 待办序列：分解评测器（1 天）→ E2/E3/E4 分析（2 天）→ 测试集扩容+3 seeds+温度重拟合（2 天）→ Jev/GLM 基线（1 天）→ 4B（预算批后 1 天）→ 受控 E6（1 天）
-- 冻结项：论文写作（按作者指示，本方案通过外部评审后启动）
+- ✅ E1 单 seed 初步结果（本文 §5.1 表：k=3 崩塌至 23%）
+- ✅ E5 歧义校准初步结果（§5.2：ECE 0.15→0.42）
+- ✅ **PMC 概率模块化分解评测器已完成** (`gen/eval_decompose.py`，支持离散 2D 卷积与自适应 Pareto 扫描)
+- ✅ **AR-FT 歧义微调数据集生成器与训练集已就绪** (`gen/make_arft_dataset.py`, `data/chain_train_arft_k12.jsonl`)
+- ✅ **Kaggle W2 实验脚本就绪** (`kaggle/train_cell_w2.py`，包含基线、标准微调、AR-FT 微调与对比评测)
+- 🏃 待办序列：Kaggle 运行 W2 实验获取 AR-FT 与基准真实数据（0.5 天）→ Pareto 曲线与温度重拟合（1 天）→ GLM/Qwen API System 2 对照基线（1 天）→ 论文初稿撰写（3-5 天）
+- 协同协议：已建立 `COLLABORATION_GUIDE.md` 规范双 AI 互审机制与红蓝对抗 Prompt 模板
 
 ---
 

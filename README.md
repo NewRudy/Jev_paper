@@ -68,6 +68,9 @@ python3 gen/verify_v2.py data/chain_*.jsonl data/ambiguous.jsonl
 
 ## 当前状态（2026-09-24）
 
-- ✅ 数据平台 + E1/E5 初步结果
-- ⏸️ **研究方案待外部 AI 评审**（通过后解冻写作）
-- ⬜ E2 分解实验（评测器待写）→ E3/E4 分析 → 扩容/3 seeds/温度重拟合 → Jev/GLM 基线 → 4B
+- ✅ 数据平台 + E1/E5 初步真实结果（k=3 崩塌至 23%，歧义 ECE 恶化至 0.42）
+- ✅ **E2 PMC 概率分解评测器已就绪**（`gen/eval_decompose.py`，支持离散 2D 卷积与置信自适应 Pareto 分析）
+- ✅ **AR-FT 歧义微调数据集已就绪**（`gen/make_arft_dataset.py`，生成 `data/chain_train_arft_k12.jsonl`）
+- ✅ **W2 Kaggle 实验 Cell 已就绪**（`kaggle/train_cell_w2.py`，支持对比基线、标准微调与 AR-FT）
+- ✅ **双 AI 协同与互审工作手册已建立**（`COLLABORATION_GUIDE.md`）
+- 🏃 待办：Kaggle 运行 W2 cell 获取 AR-FT 与基线数据 → Pareto 曲线分析 → 撰写初稿投递 Applied Intelligence
