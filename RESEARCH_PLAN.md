@@ -248,3 +248,29 @@ State 为 k 条关系事实（如 "the depot is north of the windmill. / the sil
 - **有效深度**：链向量对消后的实际组合步数
 - **ECE**：期望校准误差；**Brier**：概率评分；**AURC**：risk-coverage 曲线下面积
 - **kev-0.8b**：jaredpalmer/kev 的 0.8B 模型（Qwen3.5 底座 + LoRA + pointer head，Apache 2.0）
+
+---
+
+## 11. R1 审稿回应记录（2026-09-24，Reviewer 2 意见 → 动作）
+
+| 意见 | 动作 | 状态 |
+|---|---|---|
+| D1 对象合法性 | 方案改写为"非自回归类型化判断模型类"，Jev/Kev 降为实例 | 📝 写作阶段执行 |
+| D2 单一合成域 | policy 域 benchmark（make_policy_dataset.py，900 样本已验证）升级为主实验；PMC 跨域同参数 | ⬜ W4 |
+| D3 System 2 缺失 | GLM/Qwen zero-shot CoT + 判断 prompt 双模式基线列入 W4 | ⬜ W4 |
+| D4 统计规范 | 3 seeds + 扩容测试集 + bootstrap CI + ECE binning 敏感性 | ⬜ W4 |
+| D5 单一规模 | kev-4b 主配置复跑（需租卡预算） | ⬜ W4 |
+| T1 神经-符号谱系缺位 | related work 重写：NMN/NS-VQA/semantic-parser+executor 对位；novelty 收窄为 (a)无训练部署的判断原语 (b)分布级组合 (c)同模型路由 | 📝 写作阶段 |
+| T2 cascade 差异形式化 | cost model：升级成本=k−1 次前向+共享 state KV 复用 vs 异模型调用 | 📝 写作阶段 |
+| T3 缺失基线 | self-consistency→判断模型上退化为固定分布采样，改为 **permute-vote**（选项重排投票，kev serve 原生支持）；规则引擎 oracle 上界；Jev API；label smoothing/温度缩放对照 | ✅ permute 已入 W3 cell；其余 W4 |
+| PMC-M1 独立性未验证 | **JS 散度检验**：k=2 直答实测分布 vs 卷积预测分布 | ✅ 已入 W3 cell |
+| PMC-M2 伪分解 | 诚实定位"概率符号组合层"，谱系对位 | 📝 写作阶段 |
+| PMC-M3 (0,0) 质量丢弃 | 敏感性分析（含/不含对消格） | ⬜ 分析阶段 |
+| **AR-FT-A1 实现 bug** | **已修复**：同一歧义 state 双份（label=ns/ew），CE 下梯度等效 0.5/0.5 软标签；60 state 全部成对验证通过（check_arft.py） | ✅ 完成 |
+| AR-FT-A2 歧义人为性 | 人类基线（5 标注者×100 对角线）列入 W4 | ⬜ W4 |
+| AR-FT-A3 比例消融 | {5%,10%,20%} 扫描列入 W4 | ⬜ W4 |
+| **X1 深度外推** | **数据已生成并验证**：chain_train_deep_k14（1000 样本）+ chain_test_k5/k6（各100）；W3 cell 含 训练→直答 k=1..6 vs PMC vs permute-vote 全对比 | ✅ 数据就绪，W3 运行中 |
+| X2 传播有效性 | JS 散度（M1）+ permute-vote（T3）已入 W3 | ✅ 已入 cell |
+| X3 AR-FT 对照套件 | W3 跑 std-FT vs AR-FT-fixed；label smoothing/温度缩放对照 W4 | 🏃 部分 |
+
+**W3 Kaggle cell**（`kaggle/train_cell_w3.py`）实验流：基线 k=1..6+歧义 → 三组训练（AR-FT 修复版 / 标准 / 深度 k1-4）→ 直答全评测 → serve + PMC + permute-vote + JS 散度。数据全部 cell 内生成（公开仓库 clone），消灭数据集挂载依赖。

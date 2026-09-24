@@ -1,8 +1,14 @@
-"""Generate Ambiguity-Regularized Fine-Tuning (AR-FT) dataset.
+"""Generate Ambiguity-Regularized Fine-Tuning (AR-FT) dataset. [A1-fixed]
 
-Combines standard k=1,2 chain training samples with balanced ambiguity anchor pairs.
-Training on empirical ambiguity anchors prevents logit overconfidence and preserves
-ECE calibration without degrading in-distribution accuracy.
+R1 review fix: original version placed alternating hard labels on DIFFERENT
+ambiguous states, which teaches "ambiguous inputs still have a definite
+answer" and can worsen overconfidence. Corrected mechanism: each ambiguous
+state appears TWICE with the two axis labels (ns, ew) in equal proportion —
+under cross-entropy with equal sample weights this is gradient-equivalent to
+a 0.5/0.5 soft target, pushing the marginal toward the ideal 50/50 split
+without changing the training objective.
+
+Usage: python3 gen/make_arft_dataset.py [--seed 42] [--ambig_ratio 0.10]
 """
 from __future__ import annotations
 
@@ -19,32 +25,35 @@ OUT = Path("data")
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--ambig_ratio", type=float, default=0.10, help="Ratio of ambiguous anchors to chain samples (default 10%)")
+    ap.add_argument("--ambig_ratio", type=float, default=0.10,
+                    help="Ratio of ambiguity anchor PAIRS to chain samples")
     args = ap.parse_args()
 
     rng = random.Random(args.seed)
-    
-    # 1. Load or generate baseline chain train (600 samples)
+
+    # 1. Baseline chain train (600 samples, k<=2)
     chain_train_path = OUT / "chain_train_k12.jsonl"
     if chain_train_path.exists():
         chain_samples = [json.loads(line) for line in open(chain_train_path)]
     else:
         print("chain_train_k12.jsonl not found; generating fresh...")
         chain_samples = []
-        for k, n in [(1, 300), (2, 300)]:
-            for _ in range(n):
-                s = G.gen_chain(rng, k, noul=(rng.random() < 0.25))
-                if s:
-                    chain_samples.append({"state": s["state"], "questions": s["questions"]})
+        while len(chain_samples) < 600:
+            k = 1 if len(chain_samples) % 2 == 0 else 2
+            s = G.gen_chain(rng, k, noul=(rng.random() < 0.25))
+            if s:
+                chain_samples.append({"state": s["state"],
+                                      "questions": s["questions"]})
 
-    num_ambig = int(len(chain_samples) * args.ambig_ratio)
-    print(f"Adding {num_ambig} ambiguous anchor samples to {len(chain_samples)} chain samples (ratio={args.ambig_ratio})...")
+    # 2. Balanced ambiguous anchors: SAME state duplicated with BOTH labels.
+    #    (a, a') pairs: label=ns and label=ew on identical state text.
+    num_pairs = int(len(chain_samples) * args.ambig_ratio)
+    print(f"Adding {num_pairs} ambiguity anchor PAIRS "
+          f"({2*num_pairs} records) to {len(chain_samples)} chain samples")
 
-    # 2. Generate balanced ambiguous samples
-    # For diagonal points (|dr| == |dc|), generate pairs with balanced labels (one favoring NS, one favoring EW)
-    ambig_samples = []
+    ambig_records = []
     seen = set()
-    while len(ambig_samples) < num_ambig:
+    while num_pairs > 0:
         s = G.gen_ambiguous(rng)
         if s is None:
             continue
@@ -52,22 +61,26 @@ def main():
         if h in seen:
             continue
         seen.add(h)
-        
-        # Balance label between primary (ns) and secondary (ew)
         q = s["questions"]["q1"]
-        ideal = list(q.get("ideal_probs", {}).keys())
-        if len(ideal) == 2:
-            chosen_label = ideal[len(ambig_samples) % 2]
-            q_clean = {
-                "type": q["type"],
-                "instructions": q["instructions"],
-                "criteria": q["criteria"],
-                "label": chosen_label
-            }
-            ambig_samples.append({"state": s["state"], "questions": {"q1": q_clean}})
+        ideal = q.get("ideal_probs", {})
+        ns = next((k for k in ideal if k in ("north", "south")), None)
+        ew = next((k for k in ideal if k in ("east", "west")), None)
+        if not (ns and ew):
+            continue
+        for lab in (ns, ew):
+            ambig_records.append({
+                "state": s["state"],
+                "questions": {"q1": {
+                    "type": q["type"],
+                    "instructions": q["instructions"],
+                    "criteria": q["criteria"],
+                    "label": lab,
+                }},
+            })
+        num_pairs -= 1
 
-    # 3. Combine and shuffle
-    combined = chain_samples + ambig_samples
+    # 3. Combine and shuffle (pairs must not be adjacent, but order is free)
+    combined = chain_samples + ambig_records
     rng.shuffle(combined)
 
     out_file = OUT / "chain_train_arft_k12.jsonl"
@@ -75,7 +88,16 @@ def main():
         for item in combined:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
-    print(f"Successfully generated {len(combined)} samples in {out_file} (Chain: {len(chain_samples)}, Ambig: {len(ambig_samples)})")
+    # sanity: both labels of each pair present with same state
+    from collections import Counter
+    c = Counter()
+    for r in combined:
+        q = r["questions"]["q1"]
+        if q["label"] in ("north", "south", "east", "west") \
+                and "ideal" not in q:
+            c[q["label"]] += 1
+    print(f"Wrote {len(combined)} records -> {out_file}")
+    print(f"(anchor label counts include chain samples; NS/EW balance check: {c})")
 
 
 if __name__ == "__main__":

@@ -220,3 +220,147 @@ if __name__ == "__main__":
             decomposed_count += 1
     
     print(f"Successfully decomposed {decomposed_count}/{len(rows)} samples in {p.name}")
+
+
+# ============================ serve-based evaluation (R1 X2) ================
+import urllib.request
+
+SERVE = "http://127.0.0.1:%d/v1/systemone"
+
+
+def query_serve(state: str, questions: dict, port: int = 8009) -> Optional[dict]:
+    payload = json.dumps({"state": state, "model": "kev-latest",
+                          "questions": questions}).encode()
+    req = urllib.request.Request(
+        SERVE % port, data=payload,
+        headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return json.loads(r.read()).get("answers")
+    except Exception:
+        return None
+
+
+def eval_file_via_serve(test_file: str, port: int = 8009, permute_n: int = 0):
+    """One request per sample carrying the DIRECT question plus all k atomic
+    sub-questions (kev isolates questions in one forward pass). Optionally
+    adds permute-vote: the direct choice question re-asked with permuted
+    option order (the judgment-model analogue of self-consistency, since
+    repeated sampling from a fixed output distribution is degenerate).
+
+    Returns list of records: {k, direct, pmc, permute, label, type}
+    """
+    rows = [json.loads(l) for l in open(test_file)]
+    out = []
+    for r in rows:
+        q1 = r["questions"]["q1"]
+        subs = decompose_sample(r)
+        if not subs:
+            continue
+        k = len(subs)
+        # build one request: direct + atomics (+ permuted direct variants)
+        qs = {"direct": {kk: q1[kk] for kk in ("type", "instructions", "criteria")}}
+        for i, sq in enumerate(subs):
+            qs["a%d" % i] = {"type": "choice", "instructions": sq["instructions"],
+                             "criteria": {d: None for d in DIR8}}
+        perms = []
+        if permute_n > 0 and q1["type"] == "choice":
+            import random as _rd
+            opts = list(q1["criteria"].keys())
+            for j in range(permute_n):
+                po = opts[:]
+                _rd.Random(j).shuffle(po)
+                qs["p%d" % j] = {"type": "choice",
+                                 "instructions": q1["instructions"],
+                                 "criteria": {d: q1["criteria"][d] for d in po}}
+        ans = query_serve(r["state"], qs, port)
+        if ans is None or "direct" not in ans:
+            continue
+        d = ans["direct"]
+        direct = d.get("choice", d.get("noul"))
+        probs_d = d.get("probabilities")
+        # atomic hop distributions -> convolution
+        hop_probs = []
+        ok = True
+        for i in range(k):
+            a = ans.get("a%d" % i)
+            if not a or "probabilities" not in a:
+                ok = False
+                break
+            hop_probs.append(a["probabilities"])
+        pmc_pred = pmc_conf = None
+        if ok:
+            disp = convolve_discrete_distributions(hop_probs)
+            if q1["type"] == "choice":
+                pmc_pred, pmc_conf, _H = marginalize_to_choice(disp)
+            else:
+                pmc_pred, pmc_conf, _H = marginalize_to_noul(disp)
+        # permute vote
+        pv = None
+        if permute_n > 0 and q1["type"] == "choice":
+            votes = [ans.get("p%d" % j, {}).get("choice") for j in range(permute_n)]
+            votes = [v for v in votes if v]
+            if votes:
+                pv = max(set(votes), key=votes.count)
+        # convolved distribution for divergence analysis (k=2)
+        conv_dist = None
+        if ok and q1["type"] == "choice" and probs_d:
+            cd = collections.defaultdict(float)
+            for (rr, cc), p in convolve_discrete_distributions(hop_probs).items():
+                ns = "north" if rr < 0 else "south" if rr > 0 else ""
+                ew = "west" if cc < 0 else "east" if cc > 0 else ""
+                d_ = ns + ew if ns and ew else (ns or ew)
+                if d_ in DIR8_VEC and not (rr == 0 and cc == 0):
+                    cd[d_] += p
+            conv_dist = dict(cd)
+        out.append({"k": k, "type": q1["type"], "label": q1["label"],
+                    "direct": direct, "direct_probs": probs_d,
+                    "pmc": pmc_pred, "pmc_conf": pmc_conf,
+                    "permute": pv, "conv_dist": conv_dist})
+    return out
+
+
+def summarize(records: List[dict]) -> dict:
+    n = len(records)
+    def acc(key):
+        got = [r for r in records if r.get(key) is not None]
+        if not got:
+            return None
+        return sum(1 for r in got if r[key] == r["label"]) / len(got)
+    return {"n": n,
+            "acc_direct": acc("direct"),
+            "acc_pmc": acc("pmc"),
+            "acc_permute": acc("permute")}
+
+
+def js_divergence_check(records_k2: List[dict]) -> dict:
+    """X2a: independence validation — JS divergence between the convolved
+    distribution (from two k=1 marginals) and the model's DIRECT k=2
+    distribution. Large JS => independence assumption violated."""
+    import math as _m
+    def jsd(p, q):
+        ks = set(p) | set(q)
+        p = [p.get(x, 0.0) for x in ks]
+        q = [q.get(x, 0.0) for x in ks]
+        m = [(a + b) / 2 for a, b in zip(p, q)]
+        def kl(a, b):
+            return sum(x * _m.log((x + 1e-12) / (y + 1e-12))
+                       for x, y in zip(a, b) if x > 0)
+        return 0.5 * kl(p, m) + 0.5 * kl(q, m)
+
+    vals = []
+    for r in records_k2:
+        if r["k"] == 2 and r.get("conv_dist") and r.get("direct_probs"):
+            cd = r["conv_dist"]
+            dp = {k2: v for k2, v in r["direct_probs"].items() if k2 in DIR8_VEC}
+            s = sum(cd.values())
+            cd = {k2: v / s for k2, v in cd.items()} if s > 0 else cd
+            s2 = sum(dp.values())
+            dp = {k2: v / s2 for k2, v in dp.items()} if s2 > 0 else dp
+            vals.append(jsd(cd, dp))
+    if not vals:
+        return {"n": 0}
+    vals.sort()
+    return {"n": len(vals), "js_mean": sum(vals) / len(vals),
+            "js_median": vals[len(vals) // 2],
+            "js_p90": vals[int(len(vals) * 0.9)]}
