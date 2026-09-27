@@ -37,7 +37,7 @@ run(f"ls -la data/ | head -25")
 #  its anchors are construction-verified separately — see check_arft.py)
 run(f"PYTHONPATH=/kaggle/working/Jev_paper/gen python3 /kaggle/working/Jev_paper/gen/verify_v2.py "
    f"data/chain_train_k12.jsonl "
-   f"data/chain_train_deep_k14.jsonl "
+   f"data/chain_train_deep_k14.jsonl data/chain_train_std1k_k12.jsonl "
    f"data/chain_test_k5.jsonl "
    f"data/chain_test_k6.jsonl "
    f"data/ambiguous.jsonl")
@@ -61,17 +61,19 @@ def train(data, out, epochs):
 train("data/chain_train_arft_k12.jsonl", "runs/arft", 3)     # A1-fixed
 train("data/chain_train_k12.jsonl",      "runs/std",  3)     # standard FT (3ep, matches arft)
 train("data/chain_train_deep_k14.jsonl", "runs/deep", 2)     # X1 deep
+train("data/chain_train_std1k_k12.jsonl", "runs/std1k", 2)   # size-matched control (k<=2 only)
 
 # ---------- 4) direct evals for all models on k=1..6 + ambiguity ----------
-for model in ["std", "arft", "deep"]:
+for model in ["std", "arft", "std1k", "deep"]:
     for k in KS:
         run(f"{UV} -m kev.benchmark --run runs/{model} --data {BASE % k} --out runs/{model}-k{k}")
     run(f"{UV} -m kev.benchmark --run runs/{model} --data data/ambiguous.jsonl --out runs/{model}-amb")
 
 print("\n=========== DIRECT-ANSWER SUMMARY (acc) ===========")
 import pathlib
-for f in sorted(pathlib.Path("runs").glob("*k*/report.json")) + \
-         sorted(pathlib.Path("runs").glob("*amb*/report.json")):
+OWNED = ("base-", "std-", "std1k-", "arft-", "deep-", "chain-", "coord-", "eval-", "random-", "pmc-")
+for f in sorted([p for p in pathlib.Path("runs").rglob("report.json")
+                 if p.parent.name.startswith(OWNED)]):
     try:
         d = json.loads(f.read_text()).get("clean", {})
         print(f.parent.name, "acc=%.3f ece=%.3f brier=%.3f" % (

@@ -55,6 +55,19 @@ def main():
                                 "questions": s["questions"]},
                                ensure_ascii=False) + "\n")
 
+    # control: 1000 samples k<=2 only (matches deep's SIZE, not depth diversity)
+    ctrl = []
+    for k in (1, 2):
+        part = dedup(rng, lambda k=k: G.gen_chain(
+            rng, k, noul=(rng.random() < 0.25)), 500, seen)
+        ctrl.extend(part)
+    rng.shuffle(ctrl)
+    with open(OUT / "chain_train_std1k_k12.jsonl", "w") as f:
+        for s in ctrl:
+            f.write(json.dumps({"state": s["state"],
+                                "questions": s["questions"]},
+                               ensure_ascii=False) + "\n")
+
     # tests: k=5,6 (100 each)
     for k in (5, 6):
         part = dedup(rng, lambda k=k: G.gen_chain(
@@ -66,7 +79,8 @@ def main():
                                    ensure_ascii=False) + "\n")
 
     # report
-    for name in ("chain_train_deep_k14", "chain_test_k5", "chain_test_k6"):
+    for name in ("chain_train_deep_k14", "chain_train_std1k_k12",
+                 "chain_test_k5", "chain_test_k6"):
         rows = [json.loads(l) for l in open(OUT / (name + ".jsonl"))]
         noul = sum(1 for r in rows if r["questions"]["q1"]["type"] == "noul")
         print(f"{name}: {len(rows)} samples, noul={noul}")

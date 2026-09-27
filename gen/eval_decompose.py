@@ -259,7 +259,10 @@ def eval_file_via_serve(test_file: str, port: int = 8009, permute_n: int = 0):
             continue
         k = len(subs)
         # build one request: direct + atomics (+ permuted direct variants)
-        qs = {"direct": {kk: q1[kk] for kk in ("type", "instructions", "criteria")}}
+        direct_q = {"type": q1["type"], "instructions": q1["instructions"]}
+        if "criteria" in q1:                      # noul has no criteria
+            direct_q["criteria"] = q1["criteria"]
+        qs = {"direct": direct_q}
         for i, sq in enumerate(subs):
             qs["a%d" % i] = {"type": "choice", "instructions": sq["instructions"],
                              "criteria": {d: None for d in DIR8}}
