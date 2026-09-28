@@ -122,12 +122,15 @@ def convolve_discrete_distributions(hop_probs: List[Dict[str, float]]) -> Dict[T
     """Exact discrete 2D spatial convolution of direction probability distributions."""
     curr_dist: Dict[Tuple[int, int], float] = {(0, 0): 1.0}
     for hop in hop_probs:
+        s = sum(v for k, v in hop.items() if k in DIR8_VEC)
+        if s <= 0:
+            continue                      # degenerate hop: skip
         next_dist: Dict[Tuple[int, int], float] = collections.defaultdict(float)
         for (r, c), p in curr_dist.items():
             for d_name, p_d in hop.items():
                 if d_name in DIR8_VEC:
                     dr, dc = DIR8_VEC[d_name]
-                    next_dist[(r + dr, c + dc)] += p * p_d
+                    next_dist[(r + dr, c + dc)] += p * (p_d / s)
         curr_dist = next_dist
     return curr_dist
 
@@ -160,8 +163,17 @@ def marginalize_to_choice(disp_dist: Dict[Tuple[int, int], float]) -> Tuple[str,
 
 
 def marginalize_to_noul(disp_dist: Dict[Tuple[int, int], float]) -> Tuple[bool, float, float]:
-    """Marginalize 2D displacement distribution to boolean north query."""
-    p_yes = sum(p for (r, c), p in disp_dist.items() if r < 0)
+    """Marginalize 2D displacement distribution to boolean north query.
+
+    Defensive: the model may return hop distributions that do not sum to 1,
+    so the displacement mass is renormalized and p_yes clamped to [0,1]
+    before the entropy is taken (otherwise log() gets a domain error).
+    """
+    total = sum(disp_dist.values())
+    if total <= 0:
+        return False, 0.0, 0.0
+    p_yes = sum(p for (r, c), p in disp_dist.items() if r < 0) / total
+    p_yes = min(1.0, max(0.0, p_yes))
     p_no = 1.0 - p_yes
     pred = p_yes >= 0.5
     conf = max(p_yes, p_no)
@@ -253,6 +265,7 @@ def eval_file_via_serve(test_file: str, port: int = 8009, permute_n: int = 0):
     rows = [json.loads(l) for l in open(test_file)]
     out = []
     for r in rows:
+      try:
         q1 = r["questions"]["q1"]
         subs = decompose_sample(r)
         if not subs:
@@ -320,6 +333,8 @@ def eval_file_via_serve(test_file: str, port: int = 8009, permute_n: int = 0):
                     "direct": direct, "direct_probs": probs_d,
                     "pmc": pmc_pred, "pmc_conf": pmc_conf,
                     "permute": pv, "conv_dist": conv_dist})
+      except Exception as e:               # one bad sample must not kill the file
+        print("  sample skipped:", type(e).__name__, e)
     return out
 
 
