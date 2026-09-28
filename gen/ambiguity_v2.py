@@ -59,61 +59,58 @@ def gen_a1(rng: random.Random, rows_range=(6, 9), ents_range=(4, 6)) -> Optional
 
 
 # ------------------------------------------------------------------ A4
+# Purely a membership/reachability vocabulary: no spatial language here, so a
+# stray "north of" can never leak in and make the queried pair derivable.
+SYSTEMS = ["billing_svc", "auth_gateway", "vault_node", "report_db", "media_cdn",
+           "policy_engine", "ledger_svc", "session_cache", "audit_svc", "batch_runner"]
 A4_INTROS = [
-    "Here are the access records for several systems:",
-    "The log below lists system access records:",
-    "Recorded entries for the following systems:",
+    "The network inventory below records subnet membership:",
+    "From the network inventory:",
+    "Inventory extract:",
 ]
 A4_LINE = [
-    "- {a} is reachable from the {b} subnet.",
-    "- {a} belongs to the {b} subnet.",
-    "- the {a} subnet includes the {b}.",
+    "- {a} is deployed inside the {b} subnet.",
+    "- {a} runs in the {b} subnet.",
+    "- {b} subnet hosts {a}.",
 ]
 A4_Q = [
-    "Is {a} in the same subnet as {b}?",
-    "Can traffic from {a} reach {b} directly?",
-    "Are {a} and {b} on the same subnet?",
+    "Are {a} and {b} in the same subnet?",
+    "Is there a recorded shared subnet for {a} and {b}?",
 ]
 
 
-def gen_a4(rng: random.Random, k_other: int = 2) -> Optional[dict]:
-    """Ask about a pair with NO connecting fact; other facts are present so
-    the state is not trivially empty. No derivation is possible."""
-    pool = list(G.LANDMARKS)
-    rng.shuffle(pool)
-    subject, target, others = pool[0], pool[1], pool[2:2 + k_other]
+def gen_a4(rng: random.Random, k_other: int = 3) -> Optional[dict]:
+    """Ask about a pair with NO connecting membership fact. Other membership
+    facts are present, so the state is not trivially empty, but no transitive
+    path joins the queried pair. No derivation is possible -> the only correct
+    behaviour is low confidence."""
+    names = rng.sample(SYSTEMS, k_other + 2)
+    subject, target, fillers = names[0], names[1], names[2:]
+    subnets = ["alpha", "beta", "gamma", "delta"][:k_other]
+
     lines = [rng.choice(A4_INTROS)]
-    spares = [x for x in pool if x not in (subject, target)]
-    for name in others:
-        peer = rng.choice([x for x in spares if x != name])
-        lines.append(rng.choice(A4_LINE).format(a=G.art(name), b=G.art(peer)))
-    # noise relations among fillers only - never the queried pair,
-    # so no derivation for (subject, target) exists
-    for j in range(len(others) - 1):
-        x, y = others[j], others[j + 1]
-        lines.append('- the %s is %s of the %s.' % (x, rng.choice(DIR4), y))
-        x, y = rng.sample([o for o in others] * 2, 2) if len(others) >= 2 else (subject, subject)
-        if x == y:
-            continue
-        d = rng.choice(DIR4)
-        lines.append(f"- the {x} is {d} of the {y}.")
-    lines.append("- No other relationship between these systems is recorded.")
+    # each filler is placed in one subnet; subject/target are in none of them,
+    # and no line mentions both
+    for name, sn in zip(fillers, subnets):
+        lines.append(rng.choice(A4_LINE).format(a=name, b=sn))
+    lines.append("- %s and %s do not appear in any subnet entry above."
+                 % (subject, target))
     state = "\n".join(lines)
     q = {
         "type": "choice",
-        "instructions": rng.choice(A4_Q).format(a=G.art(subject), b=G.art(target)),
+        "instructions": rng.choice(A4_Q).format(a=subject, b=target),
         "criteria": {
-            "yes_connected": "A recorded fact establishes the relationship",
-            "no_not_connected": "No recorded fact establishes it",
-            "insufficient_information": "The records do not settle the question",
+            "same_subnet": "A recorded entry places both in one subnet",
+            "different_subnets": "A recorded entry places them in different subnets",
+            "not_recorded": "No recorded entry settles the question",
         },
     }
     return {
         "state": state,
-        "questions": {"q1": {**q, "label": "insufficient_information",
-                             "ideal_probs": {"insufficient_information": 0.7,
-                                             "yes_connected": 0.15,
-                                             "no_not_connected": 0.15}}},
+        "questions": {"q1": {**q, "label": "not_recorded",
+                             "ideal_probs": {"not_recorded": 0.7,
+                                             "same_subnet": 0.15,
+                                             "different_subnets": 0.15}}},
         "meta": {"atype": "A4", "ideal": "low_conf"},
     }
 

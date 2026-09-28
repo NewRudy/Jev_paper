@@ -56,6 +56,7 @@ def main():
     OUT.mkdir(exist_ok=True)
 
     seen = set()
+    pending = []          # (name, rows) written after all generators run
     a1 = dedup(lambda: A.gen_a1(rng), 150, seen)
     a4 = dedup(lambda: A.gen_a4(rng), 150, seen)
     a5 = dedup(lambda: A.gen_a5(rng), 150, seen)
@@ -70,6 +71,25 @@ def main():
         if d:
             train_recs.extend(d)
     rng.shuffle(train_recs)
+
+    # E5: A1-only anchors (train on one ambiguity type, test transfer to the
+    # others) -> does the repair teach "express uncertainty" or just A1?
+    a1_only = []
+    for s in dedup(lambda: A.gen_a1(rng), 40, seen):
+        d = A.to_dual_label(s)
+        if d:
+            a1_only.extend(d)
+    rng.shuffle(a1_only)
+    pending.append(("amb_train_a1only", a1_only))
+
+    # E6: anchor-ratio sweep files (5/20/40 percent of chain size)
+    chain_rows = [json.loads(l) for l in open(OUT / "chain_train_k12.jsonl")]
+    for pct in (5, 20, 40):
+        keep = min(len(train_recs), int(pct / 100 * len(chain_rows)))
+        sub = list(train_recs); rng.shuffle(sub)
+        combined = chain_rows + sub[:keep]
+        rng.shuffle(combined)
+        pending.append((f"amb_r{pct}", combined))
 
     # E3 control: 60 random NON-ambiguous chain samples (same count, same
     # format, no ambiguity information) -> isolates "diversity" from
@@ -94,6 +114,8 @@ def main():
         "amb_train_a1a5": write("amb_train_a1a5", train_recs),
         "ctrl_random60": write("ctrl_random60", ctrl),
     }
+    for name, rows in pending:
+        counts[name] = write(name, rows)
 
     # sanity: every training anchor state must appear twice with complementary labels
     by_state = {}
