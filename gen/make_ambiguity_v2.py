@@ -57,28 +57,28 @@ def main():
 
     seen = set()
     pending = []          # (name, rows) written after all generators run
-    a1 = dedup(lambda: A.gen_a1(rng), 150, seen)
+    a1s = dedup(lambda: A.gen_a1_stated(rng), 150, seen)
+    a1u = dedup(lambda: A.gen_a1_unstated(rng), 150, seen)
     a4 = dedup(lambda: A.gen_a4(rng), 150, seen)
     a5 = dedup(lambda: A.gen_a5(rng), 150, seen)
-    mixed = a1 + a4 + a5
+    mixed = a1u + a4 + a5
     rng.shuffle(mixed)
 
     # training anchors: A1 + A5 dual-label (A4 has no meaningful dual label)
+    # AR-FT anchors are now ordinary deterministic items: the gap-filling
+    # cases (A4, A5) and their stated-specification counterparts. No dual-label
+    # soft targets are needed under the v3 redesign.
     train_recs = []
-    for s in (dedup(lambda: A.gen_a1(rng), 40, seen) +
-              dedup(lambda: A.gen_a5(rng), 40, seen)):
-        d = A.to_dual_label(s)
-        if d:
-            train_recs.extend(d)
+    for s in (dedup(lambda: A.gen_a1_stated(rng), 40, seen) +
+              dedup(lambda: A.gen_a4(rng), 20, seen) +
+              dedup(lambda: A.gen_a5(rng), 20, seen)):
+        train_recs.append({"state": s["state"], "questions": s["questions"]})
     rng.shuffle(train_recs)
 
     # E5: A1-only anchors (train on one ambiguity type, test transfer to the
     # others) -> does the repair teach "express uncertainty" or just A1?
-    a1_only = []
-    for s in dedup(lambda: A.gen_a1(rng), 40, seen):
-        d = A.to_dual_label(s)
-        if d:
-            a1_only.extend(d)
+    a1_only = [{"state": s["state"], "questions": s["questions"]}
+               for s in dedup(lambda: A.gen_a1_stated(rng), 40, seen)]
     rng.shuffle(a1_only)
     pending.append(("amb_train_a1only", a1_only))
 
@@ -107,7 +107,8 @@ def main():
         ctrl.append({"state": s["state"], "questions": s["questions"]})
 
     counts = {
-        "amb_a1": write("amb_a1", a1),
+        "amb_a1_stated": write("amb_a1_stated", a1s),
+        "amb_a1_unstated": write("amb_a1_unstated", a1u),
         "amb_a4": write("amb_a4", a4),
         "amb_a5": write("amb_a5", a5),
         "amb_mixed": write("amb_mixed", mixed),
@@ -117,14 +118,8 @@ def main():
     for name, rows in pending:
         counts[name] = write(name, rows)
 
-    # sanity: every training anchor state must appear twice with complementary labels
-    by_state = {}
-    for r in train_recs:
-        by_state.setdefault(r["state"], set()).add(str(r["questions"]["q1"]["label"]))
-    dual = sum(1 for v in by_state.values() if len(v) == 2)
     print(json.dumps(counts, indent=2))
-    print(f"training anchor states: {len(by_state)}, dual-label: {dual}, "
-          f"single-label (must be 0): {len(by_state) - dual}")
+    print(f"training anchors: {len(train_recs)} records")
 
 
 if __name__ == "__main__":

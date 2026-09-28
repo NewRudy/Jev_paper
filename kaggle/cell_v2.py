@@ -48,12 +48,14 @@ missing = [f for f in NEEDED if not os.path.exists(f)]
 assert not missing, f"missing data files: {missing}"
 print("data OK:", NEEDED)
 run("PYTHONPATH=/kaggle/working/Jev_paper/gen python3 /kaggle/working/Jev_paper/gen/verify_v2.py "
-    "data/chain_train_k12.jsonl data/amb_a1.jsonl data/amb_a4.jsonl data/amb_a5.jsonl")
+    "data/chain_train_k12.jsonl data/amb_a1_stated.jsonl "
+    "data/amb_a1_unstated.jsonl data/amb_a4.jsonl data/amb_a5.jsonl")
 run("PYTHONPATH=/kaggle/working/Jev_paper/gen python3 /kaggle/working/Jev_paper/gen/verify_ambiguity.py data")
 
 BASE = ("--base Qwen/Qwen3.5-0.8B-Base --init_from jaredpalmer/kev-0.8b "
         "--lr 2e-5 --batch 1 --accum 8 --dtype fp32 --device cuda")
-AMB = ["data/amb_a1.jsonl", "data/amb_a4.jsonl", "data/amb_a5.jsonl", "data/amb_mixed.jsonl"]
+AMB = ["data/amb_a1_stated.jsonl", "data/amb_a1_unstated.jsonl",
+       "data/amb_a4.jsonl", "data/amb_a5.jsonl", "data/amb_mixed.jsonl"]
 
 def train(data, out, extra="", epochs=3):
     rc = run(f"{UV} -m kev.train --data {data} {BASE} --epochs {epochs} --out {out} {extra}")
@@ -110,7 +112,7 @@ for a in AMB:
 # ---------- E4: post-hoc temperature refit (the tool's own OOF fit) ----------
 print("\n=========== TEMPERATURE REFIT (kev.calibrate, out-of-fold) ===========")
 for arm in ARMS + ["base"]:
-    for tag in ("amb_a1", "amb_a4", "amb_a5", "amb_mixed"):
+    for tag in ("amb_a1_stated", "amb_a1_unstated", "amb_a4", "amb_a5", "amb_mixed"):
         p = f"runs/{arm}-{tag}/rows.json"
         if not os.path.exists(p):
             continue
@@ -135,4 +137,20 @@ for f in sorted(pathlib.Path("runs").rglob("report.json")):
     print(f"{n:26s} acc={d.get('acc',-1):.3f} ece={d.get('ece',-1):.3f} "
           f"brier={d.get('brier',-1):.3f} aurc={d.get('aurc',-1):.3f} "
           f"conf_err={d.get('confident_error_rate',-1):.3f}")
+# ---------- E1c: does stating the tie-break convention change confidence? ----
+print("\n=========== SPECIFICATION-GAP EFFECT (A1s vs A1u) ===========")
+import numpy as _np
+for arm in ARMS + ["base"]:
+    conf = {}
+    for tag in ("amb_a1_stated", "amb_a1_unstated"):
+        p = f"runs/{arm}-{tag}/rows.json"
+        if not os.path.exists(p):
+            continue
+        rows = json.load(open(p))
+        c_ = [max(_np.asarray(r["p"], dtype=float)) for r in rows]
+        conf[tag] = sum(c_) / len(c_)
+    if len(conf) == 2:
+        d = conf["amb_a1_stated"] - conf["amb_a1_unstated"]
+        print(f"{arm:12s} mean_conf stated={conf['amb_a1_stated']:.3f} "
+              f"unstated={conf['amb_a1_unstated']:.3f}  delta={d:+.3f}")
 print("V2 CELL DONE")

@@ -27,9 +27,30 @@ DIR_DESCR = G.DIR_DESCR
 
 
 # ------------------------------------------------------------------ A1
-def gen_a1(rng: random.Random, rows_range=(6, 9), ents_range=(4, 6)) -> Optional[dict]:
-    """Diagonal pair, 4-way cardinal question, two defensible answers."""
-    for _ in range(120):
+# "Specification gap", measured as a controlled pair.
+#
+# A diagonal pair asked with a four-way cardinal question has two defensible
+# answers, so the label is only determined once a convention is fixed. We do
+# NOT assert an "ideal distribution" (that would be circular). Instead each
+# item is emitted twice:
+#   A1s  the tie-break convention is WRITTEN INTO the state
+#   A1u  the same item with the convention omitted
+# and we score both against the same convention label. The comparison isolates
+# one thing: whether stating the convention changes the model's confidence. If
+# confidence is unchanged, the model was never reading the spec.
+#
+# This is the literature's standard move (StepGame/CLUTRR declare a convention
+# and make the label deterministic); the paired design is the contribution.
+DIR4 = G.DIR4
+DIR_DESCR = G.DIR_DESCR
+CONVENTION = (
+    "Tie-break rule for diagonal placements: when an entity lies diagonally, "
+    "report the north-south component (north or south), not the east-west one."
+)
+
+
+def _a1_pair(rng, rows_range=(6, 9), ents_range=(4, 6)):
+    for _ in range(200):
         rows, cols = rng.randint(*rows_range), rng.randint(*rows_range)
         n = rng.randint(*ents_range)
         world = G.sample_world(rng, rows, cols, n)
@@ -41,21 +62,34 @@ def gen_a1(rng: random.Random, rows_range=(6, 9), ents_range=(4, 6)) -> Optional
             continue
         ns = "north" if dr < 0 else "south"
         ew = "west" if dc < 0 else "east"
-        tpl = rng.choice([
-            "In which of the four cardinal directions is {a} from {b}?",
-            "If you stand at {b}, which cardinal direction is {a}?",
-        ])
+        plan = G.render_plan(rng, world)
+        body = G.render(world, plan)
         q = {
             "type": "choice",
-            "instructions": tpl.format(a=G.art(a), b=G.art(b)),
+            "instructions": "In which of the four cardinal directions is %s from %s?"
+                            % (G.art(a), G.art(b)),
             "criteria": {d: DIR_DESCR[d] for d in DIR4},
         }
-        return {
-            "state": G.render(world, G.render_plan(rng, world)),
-            "questions": {"q1": {**q, "label": ns, "ideal_probs": {ns: 0.5, ew: 0.5}}},
-            "meta": {"atype": "A1", "ideal": "split"},
-        }
-    return None
+        stated = {"state": body + "\n" + CONVENTION,
+                  "questions": {"q1": {**q, "label": ns}}}
+        unstated = {"state": body,
+                    "questions": {"q1": {**q, "label": ns}}}
+        return stated, unstated, {"a": a, "b": b, "ns": ns, "ew": ew}
+    return None, None, None
+
+
+def gen_a1_stated(rng, **kw):
+    s, _u, meta = _a1_pair(rng, **kw)
+    if s is None:
+        return None
+    return {**s, "meta": {"atype": "A1s", "spec": "stated", **meta}}
+
+
+def gen_a1_unstated(rng, **kw):
+    _s, u, meta = _a1_pair(rng, **kw)
+    if u is None:
+        return None
+    return {**u, "meta": {"atype": "A1u", "spec": "unstated", **meta}}
 
 
 # ------------------------------------------------------------------ A4
@@ -143,21 +177,27 @@ def gen_a5(rng: random.Random) -> Optional[dict]:
     rng.shuffle(facts)
     state = "\n".join([rng.choice(A5_INTROS)] + facts)
     q = {
-        "type": "noul",
-        "instructions": f"Based on the log, is the {a} {axis} of the {b}?",
-        "criteria": {"true": "A recorded entry supports this", "false": "A recorded entry contradicts this"},
+        "type": "choice",
+        "instructions": "What does the log establish about the %s's position "
+                        "relative to the %s?" % (a, b),
+        "criteria": {
+            "%s of the %s" % (axis, b): "One entry supports this reading",
+            "%s of the %s" % (opposite, b): "One entry supports this reading",
+            "cannot_determine": "The entries contradict each other",
+        },
     }
     return {
         "state": state,
-        "questions": {"q1": {**q, "label": False, "ideal_probs": {"True": 0.5, "False": 0.5}}},
-        "meta": {"atype": "A5", "ideal": "split"},
+        "questions": {"q1": {**q, "label": "cannot_determine"}},
+        "meta": {"atype": "A5"},
     }
 
 
 # ------------------------------------------------------------------ assembly
 def to_dual_label(sample: dict) -> Optional[List[dict]]:
-    """A1/A5 training form: same state, both complementary labels, so CE
-    gradient equals a 50/50 soft target."""
+    """Legacy dual-label form. Under the v3 redesign no type needs it (A5 is a
+    single deterministic label, A1s is convention-deterministic); kept so that
+    older callers keep working."""
     q = sample["questions"]["q1"]
     ideal = q.get("ideal_probs") or {}
     if q["type"] == "choice" and len(ideal) == 2:

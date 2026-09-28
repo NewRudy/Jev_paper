@@ -19,9 +19,10 @@ DIR4 = {"north", "south", "east", "west"}
 OPP = {"north": "south", "south": "north", "east": "west", "west": "east"}
 
 
-def check_a1(rows):
-    """Reuse the coordinate parser from verify.py (three line templates) and
-    confirm the queried pair is really diagonal."""
+def check_a1(rows, expect_convention):
+    """Re-parse the coordinates and confirm the queried pair is diagonal and
+    the stored label is the north-south component under our convention. When
+    expect_convention, the convention sentence must also be present."""
     sys.path.insert(0, str(Path(__file__).parent))
     from verify import parse_state
     bad = 0
@@ -42,6 +43,12 @@ def check_a1(rows):
         dr, dc = pa[0] - pb[0], pa[1] - pb[1]
         if dr == 0 or dc == 0 or abs(dr) != abs(dc):
             bad += 1
+            continue
+        want = "north" if dr < 0 else "south"
+        if q["label"] != want:
+            bad += 1
+        if expect_convention and "Tie-break rule" not in st:
+            bad += 1
     return bad
 
 
@@ -51,13 +58,11 @@ def check_a4(rows):
     bad = 0
     for r in rows:
         st, q = r["state"], r["questions"]["q1"]
-        placed = re.findall(r"- (\w+) (?:runs in|is deployed inside)", st)
         pair = re.findall(r"- (\w+) and (\w+) do not appear", st)
         if len(pair) != 1:
             bad += 1
             continue
         a, b = pair[0]
-        # both queried systems must never co-occur in one membership line
         for line in st.split("\n"):
             if a in line and b in line and "do not appear" not in line:
                 bad += 1
@@ -77,6 +82,11 @@ def check_a5(rows):
         flat = [d for t in dirs for d in t if d]
         if len(flat) < 2 or not any(OPP.get(flat[0]) == f for f in flat[1:]):
             bad += 1                      # no contradiction present
+        if q["label"] != "cannot_determine":
+            bad += 1
+        opts = list(q["criteria"].keys())
+        if "cannot_determine" not in opts:
+            bad += 1
     return bad
 
 
@@ -89,7 +99,9 @@ def check_dual(rows):
 
 def main():
     D = Path(sys.argv[1] if len(sys.argv) > 1 else "data")
-    jobs = [("amb_a1.jsonl", check_a1), ("amb_a4.jsonl", check_a4), ("amb_a5.jsonl", check_a5)]
+    jobs = [("amb_a1_stated.jsonl", lambda r: check_a1(r, True)),
+            ("amb_a1_unstated.jsonl", lambda r: check_a1(r, False)),
+            ("amb_a4.jsonl", check_a4), ("amb_a5.jsonl", check_a5)]
     for name, fn in jobs:
         p = D / name
         if not p.exists():
@@ -102,9 +114,8 @@ def main():
         p = D / name
         if p.exists():
             rows = [json.loads(l) for l in open(p)]
-            bad = check_dual(rows)
-            print(f"{name:22s} n={len(rows):4d}  non-dual states={bad}  "
-                  f"{'OK' if bad == 0 else 'PROBLEM'}")
+            uniq = len({r["state"] for r in rows})
+            print(f"{name:22s} n={len(rows):4d}  distinct states={uniq}")
 
 
 if __name__ == "__main__":

@@ -20,9 +20,17 @@ import json
 import random
 from pathlib import Path
 
-TYPES = [("amb_a1", "direction", "Which cardinal direction"),
+TYPES = [("amb_a1_stated", "spec stated", "Direction, with a tie-break rule"),
+         ("amb_a1_unstated", "spec unstated", "Direction, no tie-break rule"),
          ("amb_a4", "membership", "Subnet relationship"),
          ("amb_a5", "conflict", "Conflicting log entries")]
+
+# The annotator is NOT asked to guess an answer. The question is whether the
+# input determines one at all -- a judgement a domain practitioner makes
+# routinely, and the one our claim is about.
+DETERMINABILITY = ["yes, it is fully determined",
+                   "no, the input is under-specified",
+                   "cannot tell from this input"]
 
 
 def main():
@@ -58,20 +66,16 @@ def main():
         opts = "".join(
             f'<label class="opt"><input type="radio" name="{it["id"]}" '
             f'value="{html.escape(o)}"> <span>{html.escape(o)}</span></label>'
-            for o in it["options"])
+            for o in DETERMINABILITY)
         blocks.append(f"""
     <fieldset data-type="{it['type']}">
       <legend><span class="tid">{html.escape(it['id'])}</span>
         <span class="k">{html.escape(it['kind'])}</span></legend>
       <pre class="state">{html.escape(it['state'])}</pre>
       <p class="q">{html.escape(it['question'])}</p>
+      <p class="ask"><strong>From this input alone, can the answer be
+        uniquely determined?</strong></p>
       <div class="opts">{opts}</div>
-      <p class="conf">How confident are you?
-        <select name="{it['id']}-conf">
-          <option value="">--</option>
-          <option>guessing</option><option>leaning</option>
-          <option>fairly sure</option><option>certain</option>
-        </select></p>
     </fieldset>""")
 
     doc = f"""<!doctype html>
@@ -93,7 +97,7 @@ def main():
  p.q {{ font-weight: 600; margin: 8px 0; }}
  .opts {{ display: flex; flex-wrap: wrap; gap: 6px 20px; }}
  .opt {{ display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }}
- p.conf {{ margin: 10px 0 0; font-size: 13px; color: #52514e; }}
+ p.ask {{ font-size: 14px; margin: 10px 0 6px; }}
  .bar {{ position: sticky; bottom: 0; background: #fff; border-top: 1px solid #e4e4e0;
          padding: 12px 0; display: flex; gap: 12px; align-items: center; }}
  button {{ font: inherit; padding: 8px 18px; border-radius: 6px;
@@ -102,10 +106,11 @@ def main():
  #status {{ font-size: 13px; color: #52514e; }}
 </style></head><body>
 <h1>Ambiguity annotation form</h1>
-<p class="lede">{len(items)} items ({args.n} per type), presented in random order.
-Pick the answer you would give, then your confidence. There are no right
-answers we are testing &mdash; we are measuring whether people share the
-distribution our evaluation assumes. Do not look anything up.</p>
+<p class="lede">{len(items)} items, presented in random order. For each one,
+answer a single question: <strong>does this input determine a unique answer,
+or is it under-specified?</strong> You are not being asked to guess an answer.
+If two readings are both defensible, the input is under-specified. Work from
+the text only; do not look anything up.</p>
 <form id="f">{''.join(blocks)}
   <div class="bar">
     <button type="button" onclick="exportCSV()">Export answers (CSV)</button>
@@ -116,13 +121,12 @@ distribution our evaluation assumes. Do not look anything up.</p>
 <script>
 const META = {json.dumps(items, ensure_ascii=False)};
 function exportCSV() {{
-  const rows = [["item_id", "type", "answer", "confidence"]];
+  const rows = [["item_id", "type", "determinability"]];
   let done = 0;
   for (const it of META) {{
     const a = document.querySelector('input[name="' + it.id + '"]:checked');
-    const c = document.querySelector('select[name="' + it.id + '-conf"]');
     if (a) done++;
-    rows.push([it.id, it.type, a ? a.value : "", c ? c.value : ""]);
+    rows.push([it.id, it.type, a ? a.value : ""]);
   }}
   const csv = rows.map(r => r.map(x => '"' + String(x).replace(/"/g, '""') + '"').join(",")).join("\\n");
   const blob = new Blob([csv], {{type: "text/csv"}});
