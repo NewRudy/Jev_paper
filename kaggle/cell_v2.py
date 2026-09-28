@@ -33,8 +33,20 @@ assert os.path.exists(UV)
 
 # ---------- data (generated in-cell; needs `datasets` for the benchmarks) ----
 run("pip install -q datasets")
-for s in ["make_dataset_v2.py", "make_ambiguity_v2.py", "adopt_benchmarks.py"]:
+# order matters: make_dataset_v2 provides chain_train_k12.jsonl, which
+# make_ambiguity_v2 and make_arft_dataset both read
+for s in ["make_dataset_v2.py", "make_ambiguity_v2.py", "make_arft_dataset.py",
+          "adopt_benchmarks.py"]:
     assert run(f"python3 /kaggle/working/Jev_paper/gen/{s}") == 0, s
+
+# fail fast if any training file is missing rather than 12 minutes in
+NEEDED = ["data/chain_train_k12.jsonl", "data/chain_train_arft_k12.jsonl",
+          "data/ctrl_random60.jsonl", "data/amb_train_a1a5.jsonl",
+          "data/amb_train_a1only.jsonl", "data/amb_r5.jsonl",
+          "data/amb_r20.jsonl", "data/amb_r40.jsonl"]
+missing = [f for f in NEEDED if not os.path.exists(f)]
+assert not missing, f"missing data files: {missing}"
+print("data OK:", NEEDED)
 run("PYTHONPATH=/kaggle/working/Jev_paper/gen python3 /kaggle/working/Jev_paper/gen/verify_v2.py "
     "data/chain_train_k12.jsonl data/amb_a1.jsonl data/amb_a4.jsonl data/amb_a5.jsonl")
 run("PYTHONPATH=/kaggle/working/Jev_paper/gen python3 /kaggle/working/Jev_paper/gen/verify_ambiguity.py data")
