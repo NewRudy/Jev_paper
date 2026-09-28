@@ -52,66 +52,68 @@ run("PYTHONPATH=/kaggle/working/Jev_paper/gen python3 /kaggle/working/Jev_paper/
     "data/amb_a1_unstated.jsonl data/amb_a4.jsonl data/amb_a5.jsonl")
 run("PYTHONPATH=/kaggle/working/Jev_paper/gen python3 /kaggle/working/Jev_paper/gen/verify_ambiguity.py data")
 
-BASE = ("--base Qwen/Qwen3.5-0.8B-Base --init_from jaredpalmer/kev-0.8b "
-        "--lr 2e-5 --batch 1 --accum 8 --dtype fp32 --device cuda")
+BASE_COMMON = ("--base Qwen/Qwen3.5-0.8B-Base --init_from jaredpalmer/kev-0.8b "
+                "--lr 2e-5 --batch 1 --accum 8 --dtype fp32 --device cuda")
 AMB = ["data/amb_a1_stated.jsonl", "data/amb_a1_unstated.jsonl",
        "data/amb_a4.jsonl", "data/amb_a5.jsonl", "data/amb_mixed.jsonl"]
 
-def train(data, out, extra="", epochs=3):
-    rc = run(f"{UV} -m kev.train --data {data} {BASE} --epochs {epochs} --out {out} {extra}")
-    assert rc == 0, f"train failed: {out}"
-    return out
+NEEDS = not os.path.exists("runs/std/adapter_model.safetensors")
+KS = [1, 2, 3, 4, 5, 6]
+BASE = "data/chain_test_k%d.jsonl"
 
-def bench(run_dir, data, out):
-    run(f"{UV} -m kev.benchmark --run {run_dir} --data {data} --out {out}")
 
-NEEDS = not os.path.exists("runs/std/rows.json") and not os.path.exists("runs/arft/rows.json")
+def tag_of(path):
+    return path.split("/")[-1].replace(".jsonl", "")
+
+
+def evaluate_arm(arm, run_dir):
+    """Benchmark + temperature-refit one arm. Never raises: a broken arm must
+    not take the other arms' results down with it."""
+    for a in AMB:
+        t = tag_of(a)
+        if os.path.exists(f"runs/{arm}-{t}/rows.json"):
+            continue
+        run(f"{UV} -m kev.benchmark --run {run_dir} --data {a} --out runs/{arm}-{t}")
+        p = f"runs/{arm}-{t}/rows.json"
+        if os.path.exists(p):
+            run(f"{UV} -m kev.calibrate --rows {p} --out runs/{arm}-{t}/calibration.json")
+
+
+# ---- per-arm: train, then immediately evaluate, so a later failure cannot
+# ---- discard earlier arms (this cell lost four full runs to that structure)
+ARMS = [("std", "data/chain_train_k12.jsonl", 3, ""),
+        ("arft", "data/chain_train_arft_k12.jsonl", 3, ""),
+        ("ctrlrand", "data/ctrl_random60.jsonl", 1, ""),
+        ("ls01", "data/chain_train_k12.jsonl", 3, "--label_smoothing 0.1"),
+        ("arft_a1only", "data/amb_train_a1only.jsonl", 3, "")]
 
 if NEEDS:
-    # ---------- E1/E2: does composition fine-tuning damage calibration? ----
-    # std  = composition FT (k<=2)            -> the damaging condition
-    # arft = same + ambiguity anchors (AR-FT)  -> the repair
-    train("data/chain_train_k12.jsonl", "runs/std")
-    train("data/chain_train_arft_k12.jsonl", "runs/arft")
-    # ctrl: composition FT + the SAME COUNT of random non-ambiguous samples (E3/H1)
-    train("data/ctrl_random60.jsonl", "runs/ctrlrand", epochs=1)
+    for pct in (5, 20, 40):
+        ARMS.append((f"arft{pct}", f"data/amb_r{pct}.jsonl", 3, ""))
+    for arm, data_file, ep, extra in ARMS:
+        print(f"\n########## ARM {arm} ##########")
+        try:
+            rc = run(f"{UV} -m kev.train --data {data_file} {BASE_COMMON} "
+                     f"--epochs {ep} --out runs/{arm} {extra}")
+            assert rc == 0, f"train rc={rc}"
+        except Exception as e:
+            print(f"!! arm {arm} training failed, skipping its evaluation: {e}")
+            continue
+        try:
+            evaluate_arm(arm, f"runs/{arm}")
+        except Exception as e:
+            print(f"!! arm {arm} evaluation failed: {e}")
 
-    # ---------- E4/H2: do standard remedies match AR-FT? ----------
-    # (a) label smoothing -- kev's own flag
-    train("data/chain_train_k12.jsonl", "runs/ls01", extra="--label_smoothing 0.1")
-    # (b) anchor-KL toward the frozen base's zero-shot distribution
-    #     (kev's own --anchor/--anchor_w; needs a base zero-shot dump)
-    run(f"{UV} -m kev.benchmark --run jaredpalmer/kev-0.8b --data data/chain_train_arft_k12.jsonl "
-        f"--out runs/zs_anchor_src")
-    train("data/chain_train_k12.jsonl", "runs/anchorkl",
-          extra="--anchor runs/zs_anchor_src/rows.json --anchor_w 1.0")
+ARM_NAMES = [a for a, *_ in ARMS]
 
-    # ---------- E5: anchors on A1 ONLY (transfer to A4/A5 tested below) ------
-    train("data/amb_train_a1only.jsonl", "runs/arft_a1only")
+# base model reference
+try:
+    evaluate_arm("base", "jaredpalmer/kev-0.8b")
+except Exception as e:
+    print("!! base evaluation failed:", e)
 
-    # ---------- E6: anchor ratio sweep (files prebuilt by the generator) ----
-    for ratio in (5, 20, 40):
-        train(f"data/amb_r{ratio}.jsonl", f"runs/arft{ratio}")
-
-# ---------- evaluation on every ambiguity set, for every arm ----------
-ARMS = ["std", "arft", "ctrlrand", "ls01", "anchorkl", "arft_a1only"] + \
-       [f"arft{r}" for r in (5, 20, 40)]
-for arm in ARMS:
-    if not os.path.exists(f"runs/{arm}/rows.json"):
-        continue
-    for a in AMB:
-        tag = a.split("/")[-1].replace(".jsonl", "")
-        bench(f"runs/{arm}", a, f"runs/{arm}-{tag}")
-
-# base model for reference
-for a in AMB:
-    tag = a.split("/")[-1].replace(".jsonl", "")
-    if not os.path.exists(f"runs/base-{tag}/rows.json"):
-        bench("jaredpalmer/kev-0.8b", a, f"runs/base-{tag}")
-
-# ---------- E4: post-hoc temperature refit (the tool's own OOF fit) ----------
 print("\n=========== TEMPERATURE REFIT (kev.calibrate, out-of-fold) ===========")
-for arm in ARMS + ["base"]:
+for arm in ARM_NAMES + ["base"]:
     for tag in ("amb_a1_stated", "amb_a1_unstated", "amb_a4", "amb_a5", "amb_mixed"):
         p = f"runs/{arm}-{tag}/rows.json"
         if not os.path.exists(p):
@@ -131,7 +133,7 @@ for arm in ARMS + ["base"]:
 print("\n=========== AMBIGUITY SUMMARY ===========")
 for f in sorted(pathlib.Path("runs").rglob("report.json")):
     n = f.parent.name
-    if not (n.startswith("base-") or any(n.startswith(a + "-") for a in ARMS)):
+    if not (n.startswith("base-") or any(n.startswith(a + "-") for a in ARM_NAMES)):
         continue
     d = json.loads(f.read_text()).get("clean", {})
     print(f"{n:26s} acc={d.get('acc',-1):.3f} ece={d.get('ece',-1):.3f} "
@@ -140,7 +142,7 @@ for f in sorted(pathlib.Path("runs").rglob("report.json")):
 # ---------- E1c: does stating the tie-break convention change confidence? ----
 print("\n=========== SPECIFICATION-GAP EFFECT (A1s vs A1u) ===========")
 import numpy as _np
-for arm in ARMS + ["base"]:
+for arm in ARM_NAMES + ["base"]:
     conf = {}
     for tag in ("amb_a1_stated", "amb_a1_unstated"):
         p = f"runs/{arm}-{tag}/rows.json"
