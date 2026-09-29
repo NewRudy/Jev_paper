@@ -1,0 +1,373 @@
+{
+  "note": "Raw v10 results transcribed once from the Kaggle log (scriptVersionId for v10-per-arm-fault-isolated). Reproduce with kaggle/cell_v2.py; regenerate tables with gen/make_results.py from runs/*/rows.json.",
+  "spec_gap_mean_confidence": {
+    "base": {
+      "stated": 0.368,
+      "unstated": 0.347,
+      "delta": 0.022
+    },
+    "std": {
+      "stated": 0.847,
+      "unstated": 0.808,
+      "delta": 0.039
+    },
+    "arft": {
+      "stated": 0.494,
+      "unstated": 0.505,
+      "delta": -0.011
+    },
+    "ctrlrand": {
+      "stated": 0.496,
+      "unstated": 0.45,
+      "delta": 0.046
+    },
+    "ls01": {
+      "stated": 0.441,
+      "unstated": 0.396,
+      "delta": 0.045
+    },
+    "arft_a1only": {
+      "stated": 0.796,
+      "unstated": 0.754,
+      "delta": 0.042
+    },
+    "arft5": {
+      "stated": 0.951,
+      "unstated": 0.921,
+      "delta": 0.03
+    },
+    "arft20": {
+      "stated": 0.957,
+      "unstated": 0.931,
+      "delta": 0.026
+    },
+    "arft40": {
+      "stated": 0.936,
+      "unstated": 0.912,
+      "delta": 0.024
+    }
+  },
+  "temperature_refit_oof": {
+    "std": {
+      "a1_stated": {
+        "shipped": 0.309,
+        "oof": 0.07,
+        "brier_oof": 0.589,
+        "aurc_delta": 0.019,
+        "acc_unchanged": true
+      },
+      "a1_unstated": {
+        "shipped": 0.407,
+        "oof": 0.091
+      }
+    },
+    "arft": {
+      "a1_stated": {
+        "shipped": 0.137,
+        "oof": 0.166,
+        "note": "temperature HURTS this arm"
+      }
+    },
+    "base": {
+      "a1_stated": {
+        "shipped": 0.298,
+        "oof": 0.089
+      }
+    },
+    "ls01": {
+      "a1_stated": {
+        "shipped": 0.123,
+        "oof": 0.118
+      }
+    },
+    "arft_a1only": {
+      "a1_stated": {
+        "shipped": 0.063,
+        "oof": 0.038
+      }
+    }
+  },
+  "ambiguity_summary": {
+    "base": {
+      "a1_stated": {
+        "acc": 0.667,
+        "ece": 0.298,
+        "brier": 0.593,
+        "aurc": 0.237,
+        "cerr": 0.0
+      },
+      "a1_unstated": {
+        "acc": 0.493,
+        "ece": 0.147,
+        "brier": 0.666,
+        "aurc": 0.378,
+        "cerr": 0.0
+      },
+      "a4": {
+        "acc": 1.0,
+        "ece": 0.251,
+        "aurc": 0.0,
+        "cerr": 0.0
+      },
+      "a5": {
+        "acc": 0.493,
+        "ece": 0.106,
+        "brier": 0.681,
+        "aurc": 0.538,
+        "cerr": 0.0
+      },
+      "mixed": {
+        "acc": 0.662,
+        "ece": 0.115,
+        "aurc": 0.174
+      }
+    },
+    "std": {
+      "a1_stated": {
+        "acc": 0.54,
+        "ece": 0.309,
+        "brier": 0.736,
+        "aurc": 0.39,
+        "cerr": 0.207
+      },
+      "a1_unstated": {
+        "acc": 0.407,
+        "ece": 0.407,
+        "brier": 0.935,
+        "aurc": 0.544,
+        "cerr": 0.2
+      },
+      "a4": {
+        "acc": 1.0,
+        "ece": 0.001,
+        "aurc": 0.0,
+        "cerr": 0.0
+      },
+      "a5": {
+        "acc": 1.0,
+        "ece": 0.001,
+        "aurc": 0.0,
+        "cerr": 0.0
+      },
+      "mixed": {
+        "acc": 0.802,
+        "ece": 0.135,
+        "aurc": 0.038
+      }
+    },
+    "ctrlrand": {
+      "a1_stated": {
+        "acc": 0.66,
+        "ece": 0.164,
+        "aurc": 0.253,
+        "cerr": 0.0
+      },
+      "a1_unstated": {
+        "acc": 0.513,
+        "ece": 0.073,
+        "aurc": 0.334,
+        "cerr": 0.0
+      },
+      "a4": {
+        "acc": 1.0,
+        "ece": 0.066,
+        "aurc": 0.0
+      },
+      "a5": {
+        "acc": 0.56,
+        "ece": 0.201,
+        "aurc": 0.43,
+        "cerr": 0.067
+      },
+      "mixed": {
+        "acc": 0.691,
+        "ece": 0.045,
+        "aurc": 0.152
+      }
+    },
+    "ls01": {
+      "a1_stated": {
+        "acc": 0.553,
+        "ece": 0.123,
+        "aurc": 0.396,
+        "cerr": 0.0
+      },
+      "a1_unstated": {
+        "acc": 0.46,
+        "ece": 0.087,
+        "aurc": 0.508,
+        "cerr": 0.0
+      },
+      "a4": {
+        "acc": 1.0,
+        "ece": 0.144,
+        "aurc": 0.0
+      },
+      "a5": {
+        "acc": 1.0,
+        "ece": 0.171,
+        "aurc": 0.0
+      },
+      "mixed": {
+        "acc": 0.82,
+        "ece": 0.126,
+        "aurc": 0.034
+      }
+    },
+    "arft": {
+      "a1_stated": {
+        "acc": 0.487,
+        "ece": 0.137,
+        "brier": 0.664,
+        "aurc": 0.555,
+        "cerr": 0.0
+      },
+      "a1_unstated": {
+        "acc": 0.167,
+        "ece": 0.341,
+        "brier": 0.856,
+        "aurc": 0.88,
+        "cerr": 0.007
+      },
+      "a4": {
+        "acc": 1.0,
+        "ece": 0.007,
+        "aurc": 0.0
+      },
+      "a5": {
+        "acc": 1.0,
+        "ece": 0.007,
+        "aurc": 0.0
+      },
+      "mixed": {
+        "acc": 0.722,
+        "ece": 0.111,
+        "aurc": 0.054
+      }
+    },
+    "arft_a1only": {
+      "a1_stated": {
+        "acc": 0.733,
+        "ece": 0.063,
+        "brier": 0.345,
+        "aurc": 0.128,
+        "cerr": 0.047
+      },
+      "a1_unstated": {
+        "acc": 0.72,
+        "ece": 0.084,
+        "brier": 0.358,
+        "aurc": 0.13,
+        "cerr": 0.027
+      },
+      "a4": {
+        "acc": 1.0,
+        "ece": 0.027,
+        "aurc": 0.0
+      },
+      "a5": {
+        "acc": 0.513,
+        "ece": 0.271,
+        "brier": 0.765,
+        "aurc": 0.474,
+        "cerr": 0.14
+      },
+      "mixed": {
+        "acc": 0.744,
+        "ece": 0.09,
+        "aurc": 0.12
+      }
+    },
+    "arft5": {
+      "a1_stated": {
+        "acc": 0.673,
+        "ece": 0.294,
+        "aurc": 0.279,
+        "cerr": 0.26
+      },
+      "a1_unstated": {
+        "acc": 0.607,
+        "ece": 0.329,
+        "aurc": 0.287,
+        "cerr": 0.253
+      },
+      "a4": {
+        "acc": 1.0,
+        "ece": 0.0,
+        "aurc": 0.0
+      },
+      "a5": {
+        "acc": 1.0,
+        "ece": 0.0,
+        "aurc": 0.0
+      },
+      "mixed": {
+        "acc": 0.869,
+        "ece": 0.11,
+        "aurc": 0.021
+      }
+    },
+    "arft20": {
+      "a1_stated": {
+        "acc": 0.7,
+        "ece": 0.257,
+        "brier": 0.536,
+        "aurc": 0.21,
+        "cerr": 0.227
+      },
+      "a1_unstated": {
+        "acc": 0.667,
+        "ece": 0.265,
+        "brier": 0.572,
+        "aurc": 0.186,
+        "cerr": 0.193
+      },
+      "a4": {
+        "acc": 1.0,
+        "ece": 0.0,
+        "aurc": 0.0
+      },
+      "a5": {
+        "acc": 1.0,
+        "ece": 0.0,
+        "aurc": 0.0
+      },
+      "mixed": {
+        "acc": 0.889,
+        "ece": 0.088,
+        "aurc": 0.015
+      }
+    },
+    "arft40": {
+      "a1_stated": {
+        "acc": 0.713,
+        "ece": 0.237,
+        "brier": 0.52,
+        "aurc": 0.179,
+        "cerr": 0.207
+      },
+      "a1_unstated": {
+        "acc": 0.7,
+        "ece": 0.227,
+        "brier": 0.535,
+        "aurc": 0.195,
+        "cerr": 0.2
+      },
+      "a4": {
+        "acc": 1.0,
+        "ece": 0.0,
+        "aurc": 0.0
+      },
+      "a5": {
+        "acc": 1.0,
+        "ece": 0.0,
+        "aurc": 0.0
+      },
+      "mixed": {
+        "acc": 0.9,
+        "ece": 0.076,
+        "aurc": 0.015
+      }
+    }
+  }
+}
